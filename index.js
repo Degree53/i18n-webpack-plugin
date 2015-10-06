@@ -1,82 +1,48 @@
 /*
 	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
+	Author Karl Purkhardt
 */
-var ConstDependency = require("webpack/lib/dependencies/ConstDependency");
-var NullFactory = require("webpack/lib/NullFactory");
-var MissingLocalizationError = require("./MissingLocalizationError");
+'use strict';
 
-/**
- *
- * @param {object|function}	localization
- * @param {string}			functionName
- * @param {boolean}			failOnMissing
- * @constructor
- */
-function I18nPlugin(localization, functionName, failOnMissing) {
-	this.localization = localization? ('function' === typeof localization? localization: makeLocalizFunction(localization))
-									: null;
-	this.functionName = functionName || "__";
-	this.failOnMissing = failOnMissing || false;
+var ConstDependency = require('webpack/lib/dependencies/ConstDependency');
+var NullFactory = require('webpack/lib/NullFactory');
+
+function Constructor(i18n) {
+	this.i18n = i18n;
 }
-module.exports = I18nPlugin;
 
-I18nPlugin.prototype.apply = function(compiler) {
-	var localization = this.localization,
-		failOnMissing = this.failOnMissing;
-	compiler.plugin("compilation", function(compilation, params) {
+Constructor.prototype.apply = function(compiler) {
+	var i18n = this.i18n;
+
+	compiler.plugin('compilation', function(compilation) {
 		compilation.dependencyFactories.set(ConstDependency, new NullFactory());
 		compilation.dependencyTemplates.set(ConstDependency, new ConstDependency.Template());
 	});
-	compiler.parser.plugin("call " + this.functionName, function(expr) {
-		var param, defaultValue;
-		switch(expr.arguments.length) {
-		case 2:
-			param = this.evaluateExpression(expr.arguments[1]);
-			if(!param.isString()) return;
-			param = param.string;
-			defaultValue = this.evaluateExpression(expr.arguments[0]);
-			if(!defaultValue.isString()) return;
-			defaultValue = defaultValue.string;
-			break;
-		case 1:
-			param = this.evaluateExpression(expr.arguments[0]);
-			if(!param.isString()) return;
-			defaultValue = param = param.string;
-			break;
-		default:
-			return;
+
+	compiler.parser.plugin('call __', function(expr) {
+
+		if (expr.arguments.length !== 1) {
+			this.state.module.errors.push(new Error('i18n.  Invalid number of arguments passed to __().  Expected 1, got ' + expr.arguments.length));
+			return false;
 		}
-		var result = localization ? localization(param) : defaultValue;
-		if(typeof result == "undefined") {
-			var error = this.state.module[__dirname];
-			if(!error) {
-				error = this.state.module[__dirname] = new MissingLocalizationError(this.state.module, param, defaultValue);
-				if (failOnMissing) {
-					this.state.module.errors.push(error);
-				} else {
-					this.state.module.warnings.push(error);
-				}
-			} else if(error.requests.indexOf(param) < 0) {
-				error.add(param, defaultValue);
-			}
-			result = defaultValue;
-		}
-		var dep = new ConstDependency(JSON.stringify(result), expr.range);
+
+		// The token to pass to i18n for l10n
+		var token = expr.arguments[0].value;
+
+		// The range of characters to replace with result
+		var range = expr.range;
+
+		// Perform the l10n using the i18n object
+		var result = JSON.stringify(i18n.__(token));
+
+		// Create, configure and register the const dependency
+		var dep = new ConstDependency(result, range);
 		dep.loc = expr.loc;
 		this.state.current.addDependency(dep);
+
 		return true;
 	});
 
 };
 
-/**
- *
- * @param {object}	localization
- * @returns {Function}
- */
-function makeLocalizFunction(localization) {
-	return function localizFunction(key) {
-		return localization[key];
-	};
-}
+module.exports = Constructor;
