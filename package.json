@@ -1,6 +1,6 @@
 {
 	"name": "i18n-wrapper-webpack-plugin",
-	"version": "0.1",
+	"version": "0.1.0",
 	"author": "Karl Purkhardt",
 	"description": "A simple plugin for utilising an existing i18n object with WebPack.",
 	"peerDependencies": {
